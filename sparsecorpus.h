@@ -27,11 +27,11 @@ private:
   }
 
   index_type readFile(const string& filename, Document& content) {
-    size_t linenr = 0;
     ifstream infile(filename.c_str());
     index_type maxIdx = 0;
     if (infile.is_open()) {
       while (infile.good()) {
+        size_t linenr = 0;
         size_t wordIdx;
         Sentence snt;
 
@@ -47,7 +47,7 @@ private:
           }
         }
 
-        if (snt.size() == 0) {
+        if (snt.empty()) {
           if (infile.good()) {
             cerr << "Warning, empty sentence in " << filename
                 << " line:" << linenr << " (not skipping)" << endl;
@@ -107,7 +107,7 @@ public:
   }
 
   size_t size() const {
-    assert(tgt.size()==0 || tgt.size() == src.size());
+    assert(tgt.empty() || tgt.size() == src.size());
     return src.size();
   }
 
