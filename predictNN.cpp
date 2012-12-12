@@ -21,25 +21,28 @@ realnumber rmse(const Sentence& observation, const vector<realnumber>& predictio
   vector<double> squares;
   const size_t dim = prediction.size();
   const size_t nobs = observation.size();
-  squares.reserve(nobs + dim);
+  squares.reserve(2*nobs + dim);
+
+  // we assume that observation is a sparse vector and first
+  // assume that all entries are zero and later fix that.
   for (size_t i = 0; i < dim; ++i) {
     squares.push_back(prediction[i] * prediction[i]);
   }
 
   for (size_t k = 0; k < nobs; ++k) {
     const index_type i = observation[k];
-    squares.push_back(-prediction[i] * prediction[i]);
+    squares.push_back(-(prediction[i] * prediction[i])); // fix error
     squares.push_back((1-prediction[i]) * (1-prediction[i]));
   }
 
   std::sort(squares.begin(), squares.end());
 
-  realnumber mse = 0;
+  realnumber squared_error = 0;
   for (size_t i = 0; i < squares.size(); ++i) {
-    mse += squares[i];
+    squared_error += squares[i];
   }
 
-  return sqrt(mse/prediction.size());
+  return sqrt(squared_error/prediction.size());
 }
 
 int main(int argc, char**argv) {
