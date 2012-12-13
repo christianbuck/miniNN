@@ -249,7 +249,7 @@ public:
       learningrate(0.0), momentumrate(0.0), reg_factor(0.0),
       n_examples(0) {
     // init weights to random values
-    const realnumber e_init = sqrt(6) / sqrt(n_in + n_out);
+    const realnumber e_init = 1.0 / sqrt(n_in);
     t1 = Array2d::Random(n_hidden, n_in) * e_init;
     t2 = Array2d::Random(n_out, n_hidden) * e_init;
     b1 = Array1d::Random(n_hidden) * e_init;
