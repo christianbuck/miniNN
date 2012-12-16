@@ -10,32 +10,8 @@
 #define EIGEN_YES_I_KNOW_SPARSE_MODULE_IS_NOT_STABLE_YET
 #include <Eigen/Sparse>
 #include "types.h"
+#include "sigmoid.h"
 using std::vector;
-
-typedef Eigen::MatrixXf Matrix2d;
-typedef Eigen::ArrayXXf Array2d;
-typedef Eigen::ArrayXf Array1d;
-//
-//typedef Eigen::MatrixXd Matrix2d;
-//typedef Eigen::ArrayXXd Array2d;
-//typedef Eigen::ArrayXd Array1d;
-
-typedef Eigen::SparseVector<realnumber> SparseArray1d;
-typedef Eigen::SparseMatrix<realnumber> SparseMatrix2d;
-
-// regular sigmoid is now tanh
-realnumber sigmoidDouble(const realnumber x) {
- /* if (x < -45) return 0.0;
-  else if (x > 45) return 1.0;
-  else return (realnumber) 1.0 / ((realnumber) 1.0 + exp(-x));
- */
-  return tanh(x);
-}
-
-realnumber sigmoidDoubleDeriv(const realnumber x) {
-  // return x * (1 - x);
-  return (realnumber) 1.0 - x*x;
-}
 
 class Gradient {
 public:
@@ -104,30 +80,28 @@ public:
     n_examples = 0;
     cost = 0.0;
     squared_error = 0.0;
-    n_errors = 0;
     fp = 0;
     fn = 0;
     tp = 0;
     tn = 0;
   }
 
-  void update(const Array1d& outputs, const Array1d& predictions) {
+  // threshold is boundary between classifying as 0 and 1, 0.5 for sigmoid, 0.0 for tanh
+  void update(const Array1d& outputs, const Array1d& predictions, const realnumber threshold = 0.5) {
     const double l_cost = (-outputs * predictions.log() - (1 - outputs) * (1 - predictions).log()).sum();
     const double l_mse = (outputs - predictions).pow(2).sum();
-    const double l_errors = ((outputs - predictions).abs() > 0.5).cast<int>().sum();
     {
       cost += l_cost;
       squared_error += l_mse;
-      n_errors += l_errors;
       n_examples++;
       for (int i = 0; i < outputs.rows(); ++i) {
-        if (predictions(i) <= 0.5) {
-          if (outputs(i) <= 0.5)
+        if (predictions(i) <= threshold) {
+          if (outputs(i) <= threshold)
             ++tn;
           else
             ++fn;
         } else {
-          if (outputs(i) > 0.5)
+          if (outputs(i) > threshold)
             ++tp;
           else
             ++fp;
@@ -185,20 +159,18 @@ private:
   Gradient momentum;
 
   Metrics train_metrics, dev_metrics, eval_metrics;
+  ActivationFunction* hidden_activation_fun;
+  ActivationFunction* output_activation_fun;
 
   double learningrate;
   double momentumrate;
   double reg_factor;
   size_t n_examples;
 
-  Array1d sigmoid(Array1d& x) const {
-    return x.unaryExpr(std::ptr_fun(sigmoidDouble));
-  }
-
   void checkFormat(std::istream& iss) const {
     // call this at those points where we expect a 
-    // # in the data. Here we read something and
-    // check if it's a #
+    // '#' in the data. Here we read something,
+    // check if it's a '#' and complain otherwise
     std::string s;
     iss >> s;
     if (s != "#") {
@@ -248,8 +220,14 @@ public:
       n_in(n_in), n_out(n_out), n_hidden(n_hidden), 
       learningrate(0.0), momentumrate(0.0), reg_factor(0.0),
       n_examples(0) {
-    // init weights to random values
+    hidden_activation_fun = new TanhActivationFunction();
+    output_activation_fun = new TanhActivationFunction();
+//    hidden_activation_fun = new SigmoidActivationFunction();
+//    output_activation_fun = new SigmoidActivationFunction();
+    // init weights to random values - best strategy may depdent on activation function
     const realnumber e_init = sqrt(6) / sqrt(n_in + n_out);
+    // const realnumber e_init = 0.5/std::max(n_in, n_out);
+    // const realnumber e_init = 1.0/(n_in + n_out);
     t1 = Array2d::Random(n_hidden, n_in) * e_init;
     t2 = Array2d::Random(n_out, n_hidden) * e_init;
     b1 = Array1d::Random(n_hidden) * e_init;
@@ -260,11 +238,17 @@ public:
   }
 
   NN(const std::string& filename) :
+      hidden_activation_fun(0), output_activation_fun(0),
       learningrate(0.0), momentumrate(0.0), reg_factor(0.0),
       n_examples(0) {
     readModelFromFile(filename);
     momentum = Gradient(n_in, n_out, n_hidden);
     n_examples = 0;
+  }
+
+  ~NN() {
+    if (hidden_activation_fun != 0) delete hidden_activation_fun;
+    if (output_activation_fun != 0) delete output_activation_fun;
   }
 
   size_t getInputDimension() const {
@@ -304,13 +288,13 @@ public:
   }
 
   void forward(const Array1d& inputs, Array1d& output_activations) const {
-    const Array1d hidden_activations = ((t1.matrix() * inputs.matrix()).array() + b1).unaryExpr(std::ptr_fun(sigmoidDouble));
-    output_activations = ((t2.matrix() * hidden_activations.matrix()).array() + b2).unaryExpr(std::ptr_fun(sigmoidDouble));
+    const Array1d hidden_activations = hidden_activation_fun->sigmoid(((t1.matrix() * inputs.matrix()).array() + b1));
+    output_activations = output_activation_fun->sigmoid(((t2.matrix() * hidden_activations.matrix()).array() + b2));
   }
 
   void forward(const SparseArray1d& sparseInputs, Array1d& output_activations) const {
-    const Array1d hidden_activations = ((t1.matrix() * sparseInputs).array() + b1).unaryExpr(std::ptr_fun(sigmoidDouble));
-    output_activations = ((t2.matrix() * hidden_activations.matrix()).array() + b2).unaryExpr(std::ptr_fun(sigmoidDouble));
+    const Array1d hidden_activations = hidden_activation_fun->sigmoid(((t1.matrix() * sparseInputs).array() + b1));
+    output_activations = output_activation_fun->sigmoid(((t2.matrix() * hidden_activations.matrix()).array() + b2));
   }
 
   void printWeights(std::ostream& oss) const {
@@ -332,32 +316,33 @@ public:
   }
 
   void updateGradient(const Array1d& inputs, const Array1d& outputs) {
-    const Array1d hidden_activations = ((t1.matrix() * inputs.matrix()).array() + b1).unaryExpr(std::ptr_fun(sigmoidDouble));
-    const Array1d predictons = ((t2.matrix() * hidden_activations.matrix()).array() + b2).unaryExpr(std::ptr_fun(sigmoidDouble));
+    const Array1d hidden_activations = hidden_activation_fun->sigmoid(((t1.matrix() * inputs.matrix()).array() + b1));
+    const Array1d output_activations = output_activation_fun->sigmoid(((t2.matrix() * hidden_activations.matrix()).array() + b2));
 
-    train_metrics.update(outputs, predictons);
+    train_metrics.update(outputs, output_activations, output_activation_fun->getThreshold());
 
-    const Array1d d3 = -(outputs - predictons) * predictons.unaryExpr(std::ptr_fun(sigmoidDoubleDeriv));
-    Array1d d2 = t2.matrix().transpose() * d3.matrix();
-    d2 *= hidden_activations.unaryExpr(std::ptr_fun(sigmoidDoubleDeriv));
+    Array1d delta_output = -(outputs - output_activations);
+    delta_output *= output_activation_fun->sigmoidDeriv(output_activations);
+    Array1d delta_hidden = t2.matrix().transpose() * delta_output.matrix();
+    delta_hidden *= hidden_activation_fun->sigmoidDeriv(hidden_activations);
 
-    g.gt2 += (d3.matrix() * hidden_activations.matrix().transpose()).array();
-    g.gt1 += (d2.matrix() * inputs.matrix().transpose()).array();
-    g.gb2 += d3;
-    g.gb1 += d2;
+    g.gt2 += (delta_output.matrix() * hidden_activations.matrix().transpose()).array();
+    g.gt1 += (delta_hidden.matrix() * inputs.matrix().transpose()).array();
+    g.gb2 += delta_output;
+    g.gb1 += delta_hidden;
     ++n_examples;
   }
 
   void updateGradient(const SparseArray1d& sparseInputs, const Array1d& outputs) {
-    const Array1d hidden_activations = ((t1.matrix() * sparseInputs).array() + b1).unaryExpr(std::ptr_fun(sigmoidDouble));
-    const Array1d output_activations = ((t2.matrix() * hidden_activations.matrix()).array() + b2).unaryExpr(std::ptr_fun(sigmoidDouble));
+    const Array1d hidden_activations = hidden_activation_fun->sigmoid(((t1.matrix() * sparseInputs).array() + b1));
+    const Array1d output_activations = output_activation_fun->sigmoid(((t2.matrix() * hidden_activations.matrix()).array() + b2));
 
-    train_metrics.update(outputs, output_activations);
+    train_metrics.update(outputs, output_activations, output_activation_fun->getThreshold());
 
     Array1d delta_output = -(outputs - output_activations);
-    delta_output *= output_activations.unaryExpr(std::ptr_fun(sigmoidDoubleDeriv));
+    delta_output *= output_activation_fun->sigmoidDeriv(output_activations);
     Array1d delta_hidden = t2.matrix().transpose() * delta_output.matrix();
-    delta_hidden *= hidden_activations.unaryExpr(std::ptr_fun(sigmoidDoubleDeriv));
+    delta_hidden *= hidden_activation_fun->sigmoidDeriv(hidden_activations);
 
     g.gb2 += delta_output;
     g.gt2 += (delta_output.matrix() * hidden_activations.matrix().transpose()).array();
@@ -368,44 +353,48 @@ public:
     n_examples++;
   }
 
-  void sparseToDense(const Sentence& sparseVector, const size_t maxIdx, Array1d& denseVector) const {
+  void sparseToDense(const Sentence& sparseVector, const size_t maxIdx, Array1d& denseVector, const realnumber val=1.0) const {
     for (Sentence::const_iterator it = sparseVector.begin(); it != sparseVector.end(); ++it) {
       if ((*it) >= maxIdx) {
         std::cerr << *it << ">" << maxIdx - 1 << std::endl;
       }
-      denseVector(*it) = 1.0;
+      denseVector(*it) = val;
     }
   }
 
-  void sparseToDense(const Batch& sparseBatch, const size_t maxIdx, Array2d& denseData) const {
+  void sparseToDense(const Batch& sparseBatch, const size_t maxIdx, Array2d& denseData, const realnumber val=1.0) const {
     for (size_t bidx = 0; bidx < sparseBatch.size(); ++bidx) {
       for (size_t sidx = 0; sidx < sparseBatch[bidx].size(); ++sidx) {
         if (sparseBatch[bidx][sidx] >= maxIdx) {
           std::cerr << sparseBatch[bidx][sidx] << ">" << maxIdx - 1 << std::endl;
         }
-        denseData(bidx, sparseBatch[bidx][sidx]) = 1.0;
+        denseData(bidx, sparseBatch[bidx][sidx]) = val;
       }
     }
   }
 
-  void sparseToSparse(const Sentence& sparseVector, SparseArray1d& sparseOutputVector) const {
+  void sparseToSparse(const Sentence& sparseVector, SparseArray1d& sparseOutputVector, const realnumber val=1.0) const {
     sparseOutputVector.reserve(sparseVector.size());
     for (Sentence::const_iterator it = sparseVector.begin(); it != sparseVector.end(); ++it) {
-      sparseOutputVector.insertBack(*it) = 1.0;
+      sparseOutputVector.insertBack(*it) = val;
     }
   }
 
   void updateGradientSparse(const Sentence& inputs, const Sentence& outputs) {
-    Array1d v_out = Array1d::Zero(n_out);
-    sparseToDense(outputs, n_out, v_out);
+    const realnumber min_value = output_activation_fun->minValue();
+    const realnumber max_value = output_activation_fun->maxValue();
+    Array1d v_out = Array1d::Constant(n_out, min_value);
+    sparseToDense(outputs, n_out, v_out, max_value);
     SparseArray1d v_in_sparse(n_in);
     sparseToSparse(inputs, v_in_sparse);
     updateGradient(v_in_sparse, v_out);
   }
 
   void updateGradientDense(const Sentence& inputs, const Sentence& outputs) {
-    Array1d v_out = Array1d::Zero(n_out);
-    sparseToDense(outputs, n_out, v_out);
+    const realnumber min_value = output_activation_fun->minValue();
+    const realnumber max_value = output_activation_fun->maxValue();
+    Array1d v_out = Array1d::Constant(n_out, min_value);
+    sparseToDense(outputs, n_out, v_out, max_value);
     Array1d v_in = Array1d::Zero(n_in);
     sparseToDense(inputs, n_in, v_in);
     updateGradient(v_in, v_out);
@@ -420,21 +409,22 @@ public:
     
     Array1d predictions;
     forward(v_in_sparse, predictions);
-    dev_metrics.update(v_out, predictions);
+    dev_metrics.update(v_out, predictions, output_activation_fun->getThreshold());
   }
 
   void evalModel(const Sentence& inputs, vector<realnumber>& outputs) const {
     SparseArray1d v_in_sparse(n_in);
     sparseToSparse(inputs, v_in_sparse);
-    const Array1d a2 = ((t1.matrix() * v_in_sparse).array() + b1).unaryExpr(std::ptr_fun(sigmoidDouble));
-    const Array1d a3 = ((t2.matrix() * a2.matrix()).array() + b2).unaryExpr(std::ptr_fun(sigmoidDouble));
+    Array1d predictions;
+    forward(v_in_sparse, predictions);
     outputs.resize(n_out);
     for (size_t i = 0; i < n_out; ++i) {
-      outputs[i] = realnumber(a3(i));
+      outputs[i] = realnumber(predictions(i));
     }
   }
 
   void evalModel(const Sentence& inputs, vector<vector<realnumber> >& outputs) const {
+    // crude evaluation of connection between inputs and outputs
     outputs.clear();
     outputs.resize(inputs.size());
 
@@ -443,24 +433,12 @@ public:
       l1oinputs.erase(l1oinputs.begin()+f1o);
       SparseArray1d v_in_sparse(n_in);
       sparseToSparse(l1oinputs , v_in_sparse);
-      const Array1d a2 = ((t1.matrix() * v_in_sparse).array() + b1).unaryExpr(std::ptr_fun(sigmoidDouble));
-      const Array1d a3 = ((t2.matrix() * a2.matrix()).array() + b2).unaryExpr(std::ptr_fun(sigmoidDouble));
+      Array1d predictions;
+      forward(v_in_sparse, predictions);
       outputs[f1o].resize(n_out);
       for (size_t i = 0; i < n_out; ++i) {
-        outputs[f1o][i] = realnumber(a3(i));
+        outputs[f1o][i] = realnumber(predictions(i));
       }
-    }
-  }
-
-  void evalModel2(const Sentence& inputs, vector<realnumber>& outputs) const {
-    Array1d v_in = Array1d::Zero(n_in);
-    sparseToDense(inputs, n_in, v_in);
-    Array1d hidden_activations = ((t1.matrix() * v_in.matrix()).array() + b1).unaryExpr(std::ptr_fun(sigmoidDouble));
-    Array1d prediction = ((t2.matrix() * hidden_activations.matrix()).array() + b2).unaryExpr(std::ptr_fun(sigmoidDouble));
-    outputs.clear();
-    outputs.resize(n_out);
-    for (size_t i = 0; i < n_out; ++i) {
-      outputs[i] = realnumber(prediction(i));
     }
   }
 
