@@ -28,7 +28,6 @@ public:
 
 protected:
   static realnumber standardSigmoidDouble(const realnumber x) {
-    return (realnumber) 1.0 / ((realnumber) 1.0 + exp(-x));
     if (x < -45) return 0.0;
     else if (x > 45) return 1.0;
     else return (realnumber) 1.0 / ((realnumber) 1.0 + exp(-x));
