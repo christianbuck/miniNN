@@ -12,14 +12,14 @@ public:
   virtual ~ActivationFunction () {};
 };
 
-class SigmoidActivationFunction: public ActivationFunction {
+class LogisticActivationFunction: public ActivationFunction {
 public:
   Array1d sigmoid(const Array1d& inputs) const {
-    return inputs.unaryExpr(std::ptr_fun<realnumber, realnumber>(standardSigmoidDouble));
+    return inputs.unaryExpr(std::ptr_fun<realnumber, realnumber>(logisticSigmoidDouble));
   }
 
   Array1d sigmoidDeriv(const Array1d& inputs) const {
-    return inputs.unaryExpr(std::ptr_fun<realnumber, realnumber>(standardSigmoidDoubleDeriv));
+    return inputs.unaryExpr(std::ptr_fun<realnumber, realnumber>(logisticSigmoidDoubleDeriv));
   }
 
   realnumber getThreshold() const { return 0.5; }
@@ -27,13 +27,13 @@ public:
   realnumber minValue() const { return 0.0; }
 
 protected:
-  static realnumber standardSigmoidDouble(const realnumber x) {
+  static realnumber logisticSigmoidDouble(const realnumber x) {
     if (x < -45) return 0.0;
     else if (x > 45) return 1.0;
     else return (realnumber) 1.0 / ((realnumber) 1.0 + exp(-x));
   }
 
-  static realnumber standardSigmoidDoubleDeriv(const realnumber x) {
+  static realnumber logisticSigmoidDoubleDeriv(const realnumber x) {
     return x * (1 - x);
   }
 

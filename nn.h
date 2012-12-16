@@ -220,10 +220,10 @@ public:
       n_in(n_in), n_out(n_out), n_hidden(n_hidden), 
       learningrate(0.0), momentumrate(0.0), reg_factor(0.0),
       n_examples(0) {
-    hidden_activation_fun = new TanhActivationFunction();
-    output_activation_fun = new TanhActivationFunction();
-//    hidden_activation_fun = new SigmoidActivationFunction();
-//    output_activation_fun = new SigmoidActivationFunction();
+//    hidden_activation_fun = new TanhActivationFunction();
+//    output_activation_fun = new TanhActivationFunction();
+    hidden_activation_fun = new LogisticActivationFunction();
+    output_activation_fun = new LogisticActivationFunction();
     // init weights to random values - best strategy may depdent on activation function
     // const realnumber e_init = sqrt(6) / sqrt(n_in + n_out);
     // const realnumber e_init = 0.5/std::max(n_in, n_out);
