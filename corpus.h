@@ -10,7 +10,7 @@ public:
   index_type in_dim, out_dim;
   index_type n_examples;
 
-  virtual Corpus(const string& input_data_file, const string& output_data_file) = 0;
+  Corpus(const string& input_data_file, const string& output_data_file);
   virtual ~Corpus() {};
 
   size_t size() const { return n_examples; }
