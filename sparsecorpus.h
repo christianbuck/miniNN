@@ -8,27 +8,43 @@
 #include <cassert>
 #include <limits>
 #include "types.h"
+#include "corpus.h"
 
-using namespace std;
+using std::vector;
+using std::ifstream;
+using std::istringstream;
+using std::cerr;
+using std::endl;
 
-class Corpus {
+class SparseCorpus : public Corpus {
 public:
 
 private:
-  Document src, tgt;
+  vector<SparseVector> input_data, output_data;
   index_type max_src, max_tgt;
 
-  size_t n_words(const Document& d) const {
+  size_t n_words(const vector<SparseVector>& data) const {
     size_t n = 0;
-    for (Document::const_iterator it = d.begin(); it != d.end(); ++it) {
-      n += it->size();
+    for (vector<SparseVector>::const_iterator it = data.begin(); it != data.end(); ++it) {
+      n += it->sum();
     }
     return n;
   }
 
-  index_type readFile(const string& filename, Document& content) {
+  index_type readFile(const string& filename, vector<SparseVector>& content) {
     ifstream infile(filename.c_str());
     index_type maxIdx = 0;
+    if (infile.is_open()) {
+      size_t wordIdx;
+      size_t maxIdx=0;
+      while (infile >> wordIdx) {
+        if (wordIdx > maxIdx) {
+          maxIdx = wordIdx;
+        }
+      }
+      infile.close();
+    }
+    infile.open(filename.c_str());
     if (infile.is_open()) {
       while (infile.good()) {
         size_t linenr = 0;
@@ -61,8 +77,12 @@ private:
         Sentence::iterator it;
         it = unique(snt.begin(), snt.end());
         snt.resize(it - snt.begin());
-        Sentence(snt).swap(snt); // shrink to fit
-        content.push_back(snt);
+        SparseVector sv(maxIdx);
+        sv.reserve(snt.size());
+        for (Sentence::const_iterator it = snt.begin(); it != snt.end(); ++it) {
+          sv.insertBack(*it) = 1.0;
+        }
+        content.push_back(sv);
         ++linenr;
       }
       infile.close();
@@ -74,55 +94,49 @@ private:
   }
 
 public:
-  Corpus() : max_src(0), max_tgt(0) {
+//  SparseCorpus() : in_dim(0), out_dim(0), n_examples(0) {
+//  }
+
+  SparseCorpus(const string& input_data_file, const string& output_data_file) {
+    in_dim = readFile(input_data_file, input_data) + 1;
+    out_dim = readFile(output_data_file, output_data) + 1;
+    cerr << "read " << input_data.size() << " (in) / " << output_data.size() << " (out) examples" << endl;
+    cerr << "total words src: " << n_words(input_data) << " tgt: " << n_words(output_data) << endl;
+    cerr << "dimensions: " << in_dim << " out: " << out_dim << endl;
+    assert(output_data.size() == input_data.size());
+    n_examples = output_data.size();
   }
 
-  Corpus(const string& src_file, const string& tgt_file) : max_src(0), max_tgt(0) {
-    max_src = readFile(src_file, src);
-    max_tgt = readFile(tgt_file, tgt);
-    cerr << "read " << src.size() << " (src) / " << tgt.size() << " (tgt) sentences" << endl;
-    cerr << "total words src: " << n_words(src) << " tgt: " << n_words(tgt) << endl;
-    cerr << "max word src: " << max_src << " tgt: " << max_tgt << endl;
-    assert(tgt.size() == src.size());
-  }
-
-  Corpus(const string& src_file) : max_src(0), max_tgt(0) {
-    max_src = readFile(src_file, src);
-    cerr << "read " << src.size() << " (src) sentences" << endl;
-    cerr << "total words src: " << n_words(src) << endl;
+  SparseCorpus(const string& src_file) : max_src(0), max_tgt(0) {
+    max_src = readFile(src_file, input_data);
+    cerr << "read " << input_data.size() << " (src) sentences" << endl;
+    cerr << "total words src: " << n_words(input_data) << endl;
     cerr << "max word src: " << max_src << endl;
   }
 
-  void getEntry(const size_t idx, Sentence& s_tgt, Sentence& s_src) const {
-    s_tgt = tgt.at(idx);
-    s_src = src.at(idx);
+  void getEntry(const size_t idx, SparseVector& in_vec, SparseVector& out_vec) const {
+    in_vec = output_data.at(idx);
+    out_vec = input_data.at(idx);
   }
 
-  void getSrcEntry(const size_t idx, Sentence& s_src) const {
-    s_src = src.at(idx);
+  void getInputs(const size_t idx, SparseVector& s_src) const {
+    s_src = input_data.at(idx);
   }
 
-  void getTgtEntry(const size_t idx, Sentence& s_tgt) const {
-    s_tgt = tgt.at(idx);
+  void getOutputsy(const size_t idx, SparseVector& s_tgt) const {
+    s_tgt = output_data.at(idx);
   }
 
-  size_t size() const {
-    assert(tgt.empty() || tgt.size() == src.size());
-    return src.size();
-  }
 
   // Fisher-Yates shuffle
   void shuffle() {
     const size_t n = size();
     for (size_t i = n-1; i > 0; --i) {
       const size_t j = rand() % (i+1); // 0 <= j <= i
-      swap(src[i], src[j]);
-      swap(tgt[i], tgt[j]);
+      std::swap(input_data[i], input_data[j]);
+      std::swap(output_data[i], output_data[j]);
     }
   }
-
-  index_type sourceDim() const { return max_src + 1; }
-  index_type targetDim() const { return max_tgt + 1; }
 
 };
 
