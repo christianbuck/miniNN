@@ -22,5 +22,4 @@ typedef Eigen::ArrayXf Array1d;
 //typedef Eigen::ArrayXXd Array2d;
 //typedef Eigen::ArrayXd Array1d;
 
-typedef Eigen::SparseVector<realnumber> SparseArray1d;
-typedef Eigen::SparseMatrix<realnumber> SparseMatrix2d;
+typedef Eigen::SparseVector<realnumber> SparseVector;

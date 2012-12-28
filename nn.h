@@ -293,7 +293,7 @@ public:
     output_activations = output_activation_fun->sigmoid(((t2.matrix() * hidden_activations.matrix()).array() + b2));
   }
 
-  void forward(const SparseArray1d& sparseInputs, Array1d& output_activations) const {
+  void forward(const SparseVector& sparseInputs, Array1d& output_activations) const {
     const Array1d hidden_activations = hidden_activation_fun->sigmoid(((t1.matrix() * sparseInputs).array() + b1));
     output_activations = output_activation_fun->sigmoid(((t2.matrix() * hidden_activations.matrix()).array() + b2));
   }
@@ -334,7 +334,7 @@ public:
     ++n_examples;
   }
 
-  void updateGradient(const SparseArray1d& sparseInputs, const Array1d& outputs) {
+  void updateGradient(const SparseVector& sparseInputs, const Array1d& outputs) {
     const Array1d hidden_activations = hidden_activation_fun->sigmoid(((t1.matrix() * sparseInputs).array() + b1));
     const Array1d output_activations = output_activation_fun->sigmoid(((t2.matrix() * hidden_activations.matrix()).array() + b2));
 
@@ -348,7 +348,7 @@ public:
     g.gb2 += delta_output;
     g.gt2 += (delta_output.matrix() * hidden_activations.matrix().transpose()).array();
     g.gb1 += delta_hidden;
-    for (SparseArray1d::InnerIterator it(sparseInputs); it; ++it) {
+    for (SparseVector::InnerIterator it(sparseInputs); it; ++it) {
       g.gt1.col(it.index()) += delta_hidden; // implicit * 1
     }
     n_examples++;
@@ -374,7 +374,7 @@ public:
     }
   }
 
-  void sparseToSparse(const Sentence& sparseVector, SparseArray1d& sparseOutputVector, const realnumber val=1.0) const {
+  void sparseToSparse(const Sentence& sparseVector, SparseVector& sparseOutputVector, const realnumber val=1.0) const {
     sparseOutputVector.reserve(sparseVector.size());
     for (Sentence::const_iterator it = sparseVector.begin(); it != sparseVector.end(); ++it) {
       sparseOutputVector.insertBack(*it) = val;
@@ -386,7 +386,7 @@ public:
     const realnumber max_value = output_activation_fun->maxValue();
     Array1d v_out = Array1d::Constant(n_out, min_value);
     sparseToDense(outputs, n_out, v_out, max_value);
-    SparseArray1d v_in_sparse(n_in);
+    SparseVector v_in_sparse(n_in);
     sparseToSparse(inputs, v_in_sparse);
     updateGradient(v_in_sparse, v_out);
   }
@@ -405,7 +405,7 @@ public:
     Array1d v_out = Array1d::Zero(n_out);
     sparseToDense(outputs, n_out, v_out);
 
-    SparseArray1d v_in_sparse(n_in);
+    SparseVector v_in_sparse(n_in);
     sparseToSparse(inputs, v_in_sparse);
     
     Array1d predictions;
@@ -414,7 +414,7 @@ public:
   }
 
   void evalModel(const Sentence& inputs, vector<realnumber>& outputs) const {
-    SparseArray1d v_in_sparse(n_in);
+    SparseVector v_in_sparse(n_in);
     sparseToSparse(inputs, v_in_sparse);
     Array1d predictions;
     forward(v_in_sparse, predictions);
@@ -432,7 +432,7 @@ public:
     for (size_t f1o = 0; f1o<inputs.size(); f1o++) {
       Sentence l1oinputs = inputs;
       l1oinputs.erase(l1oinputs.begin()+f1o);
-      SparseArray1d v_in_sparse(n_in);
+      SparseVector v_in_sparse(n_in);
       sparseToSparse(l1oinputs , v_in_sparse);
       Array1d predictions;
       forward(v_in_sparse, predictions);
