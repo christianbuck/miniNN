@@ -16,5 +16,4 @@ public:
   size_t size() const { return n_examples; }
   index_type sourceDim() const { return in_dim; }
   index_type targetDim() const { return out_dim; }
-
 };
