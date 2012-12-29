@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cassert>
 #include <limits>
+
 #include "types.h"
 #include "corpus.h"
 
@@ -16,9 +17,7 @@ using std::istringstream;
 using std::cerr;
 using std::endl;
 
-class SparseCorpus : public Corpus {
-public:
-
+class SparseCorpus: public Corpus {
 private:
   vector<SparseVector> input_data, output_data;
   index_type max_src, max_tgt;
@@ -26,7 +25,7 @@ private:
   size_t n_words(const vector<SparseVector>& data) const {
     size_t n = 0;
     for (vector<SparseVector>::const_iterator it = data.begin(); it != data.end(); ++it) {
-      n += it->sum();
+      n += it->nonZeros();
     }
     return n;
   }
@@ -36,7 +35,6 @@ private:
     index_type maxIdx = 0;
     if (infile.is_open()) {
       size_t wordIdx;
-      size_t maxIdx=0;
       while (infile >> wordIdx) {
         if (wordIdx > maxIdx) {
           maxIdx = wordIdx;
@@ -77,11 +75,12 @@ private:
         Sentence::iterator it;
         it = unique(snt.begin(), snt.end());
         snt.resize(it - snt.begin());
-        SparseVector sv(maxIdx);
+        SparseVector sv(maxIdx+1);
         sv.reserve(snt.size());
         for (Sentence::const_iterator it = snt.begin(); it != snt.end(); ++it) {
           sv.insertBack(*it) = 1.0;
         }
+        cerr << sv.rows() << " " << sv.cols() << endl;
         content.push_back(sv);
         ++linenr;
       }
@@ -98,6 +97,7 @@ public:
 //  }
 
   SparseCorpus(const string& input_data_file, const string& output_data_file) {
+    dense = false;
     in_dim = readFile(input_data_file, input_data) + 1;
     out_dim = readFile(output_data_file, output_data) + 1;
     cerr << "read " << input_data.size() << " (in) / " << output_data.size() << " (out) examples" << endl;
@@ -107,26 +107,24 @@ public:
     n_examples = output_data.size();
   }
 
-  SparseCorpus(const string& src_file) : max_src(0), max_tgt(0) {
-    max_src = readFile(src_file, input_data);
+  SparseCorpus(const string& src_file) {
+    dense = false;
+    in_dim = readFile(src_file, input_data);
     cerr << "read " << input_data.size() << " (src) sentences" << endl;
     cerr << "total words src: " << n_words(input_data) << endl;
-    cerr << "max word src: " << max_src << endl;
+    cerr << "max word src: " << in_dim << endl;
   }
+
+  SparseCorpus() {}
 
   void getEntry(const size_t idx, SparseVector& in_vec, SparseVector& out_vec) const {
     in_vec = output_data.at(idx);
     out_vec = input_data.at(idx);
   }
 
-  void getInputs(const size_t idx, SparseVector& s_src) const {
-    s_src = input_data.at(idx);
-  }
+  const SparseVector& getInputs(const size_t idx) const { return input_data.at(idx); }
 
-  void getOutputsy(const size_t idx, SparseVector& s_tgt) const {
-    s_tgt = output_data.at(idx);
-  }
-
+  const SparseVector& getOutputs(const size_t idx) const { return output_data.at(idx); }
 
   // Fisher-Yates shuffle
   void shuffle() {

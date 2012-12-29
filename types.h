@@ -23,3 +23,4 @@ typedef Eigen::ArrayXf Array1d;
 //typedef Eigen::ArrayXd Array1d;
 
 typedef Eigen::SparseVector<realnumber> SparseVector;
+typedef Eigen::VectorXf DenseVector;

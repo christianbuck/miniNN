@@ -11,11 +11,12 @@ protected:
 public:
   bool dense;
 
-  Corpus(const string& input_data_file, const string& output_data_file);
-  Corpus();
+  Corpus():
+    in_dim(0), out_dim(0), n_examples(0), dense(false) {};
   virtual ~Corpus() {};
 
   size_t size() const { return n_examples; }
   index_type inputDim() const { return in_dim; }
   index_type outputDim() const { return out_dim; }
+  virtual void shuffle() {};
 };

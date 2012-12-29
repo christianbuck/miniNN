@@ -15,8 +15,10 @@ using std::vector;
 
 class Gradient {
 public:
-  Array2d gt1, gt2;
-  Array1d gb1, gb2;
+  Array2d gt1; // Input to hidden
+  Array2d gt2; // Hidden to output
+  Array1d gb1; // Bias hidden
+  Array1d gb2; // Bias output
   Gradient() {
   }
 
@@ -363,6 +365,12 @@ public:
     }
   }
 
+  void sparseToDense(const SparseVector& sparseVector, const size_t maxIdx, Array1d& denseVector, const realnumber val=1.0) const {
+    for (SparseVector::InnerIterator it(sparseVector); it; ++it) {
+      denseVector(it.index()) = val;
+    }
+  }
+
   void sparseToDense(const Batch& sparseBatch, const size_t maxIdx, Array2d& denseData, const realnumber val=1.0) const {
     for (size_t bidx = 0; bidx < sparseBatch.size(); ++bidx) {
       for (size_t sidx = 0; sidx < sparseBatch[bidx].size(); ++sidx) {
@@ -381,25 +389,23 @@ public:
     }
   }
 
-  void updateGradientSparse(const Sentence& inputs, const Sentence& outputs) {
+  void updateGradientSparse(const SparseVector& inputs, const SparseVector& outputs) {
     const realnumber min_value = output_activation_fun->minValue();
     const realnumber max_value = output_activation_fun->maxValue();
     Array1d v_out = Array1d::Constant(n_out, min_value);
     sparseToDense(outputs, n_out, v_out, max_value);
-    SparseVector v_in_sparse(n_in);
-    sparseToSparse(inputs, v_in_sparse);
-    updateGradient(v_in_sparse, v_out);
+    updateGradient(inputs, v_out);
   }
 
-  void updateGradientDense(const Sentence& inputs, const Sentence& outputs) {
-    const realnumber min_value = output_activation_fun->minValue();
-    const realnumber max_value = output_activation_fun->maxValue();
-    Array1d v_out = Array1d::Constant(n_out, min_value);
-    sparseToDense(outputs, n_out, v_out, max_value);
-    Array1d v_in = Array1d::Zero(n_in);
-    sparseToDense(inputs, n_in, v_in);
-    updateGradient(v_in, v_out);
-  }
+//  void updateGradientDense(const DenseVector& inputs, const DenseVector& outputs) {
+//    const realnumber min_value = output_activation_fun->minValue();
+//    const realnumber max_value = output_activation_fun->maxValue();
+//    Array1d v_out = Array1d::Constant(n_out, min_value);
+//    sparseToDense(outputs, n_out, v_out, max_value);
+//    Array1d v_in = Array1d::Zero(n_in);
+//    sparseToDense(inputs, n_in, v_in);
+//    updateGradient(v_in, v_out);
+//  }
 
   void evalModelDev(const Sentence& inputs, const Sentence& outputs) {
     Array1d v_out = Array1d::Zero(n_out);
