@@ -20,7 +20,6 @@ using std::endl;
 class SparseCorpus: public Corpus {
 private:
   vector<SparseVector> input_data, output_data;
-  index_type max_src, max_tgt;
 
   size_t n_words(const vector<SparseVector>& data) const {
     size_t n = 0;
