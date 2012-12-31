@@ -18,7 +18,7 @@ predictNN : predictNN.o
 	$(CXX) $(CXXFLAGS) -c $< -o $@  
 
 .PHONY : all clean
-all:	trainNN predictNN
+all:	trainNN 
 
 clean:
 	rm -f $(OBJS) $(TARGET)
