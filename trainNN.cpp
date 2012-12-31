@@ -87,6 +87,7 @@ void trainNN(const size_t n_inputs, const size_t n_outputs, const size_t n_hidde
           cout << "in " << in_vec;
           cout << "out " << out_vec;
           nn.updateGradientSparse(in_vec, out_vec);
+          nn.numericGradient(in_vec, out_vec);
         }
 
         n_examples += 1;

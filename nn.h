@@ -23,13 +23,22 @@ public:
   }
 
   Gradient(const Gradient& g) {
-    std::cerr << "Coying gradient" << std::endl;
+    std::cerr << "Copying gradient" << std::endl;
     gt1 = g.gt1;
     gt2 = g.gt2;
     gb1 = g.gb1;
     gb2 = g.gb2;
   }
   
+  Gradient diff(const Gradient& g2) {
+    Gradient g = *this;
+    g.gt1 = gt1 - g2.gt1;
+    g.gt2 = gt2 - g2.gt2;
+    g.gb1 = gb1 - g2.gb1;
+    g.gb2 = gb2 - g2.gb2;
+    return g;
+  }
+
   Gradient& operator=(const Gradient& g) {
     gt1 = g.gt1;
     gt2 = g.gt2;
@@ -43,16 +52,16 @@ public:
   }
 
   Gradient(const size_t n_in, const size_t n_out, const size_t n_hidden) {
-    std::cerr << "Creating fixed size gradient" << std::endl;
+    //std::cerr << "Creating fixed size gradient" << std::endl;
     reset(n_in, n_out, n_hidden);
   }
 
-  void set_size(const size_t n_in, const size_t n_out, const size_t n_hidden) {
-    gt1 = Array2d::Zero(n_hidden, n_in);
-    gt2 = Array2d::Zero(n_out, n_hidden);
-    gb1 = Array1d::Zero(n_hidden);
-    gb2 = Array1d::Zero(n_out);
-  }
+//  void set_size(const size_t n_in, const size_t n_out, const size_t n_hidden) {
+//    gt1 = Array2d::Zero(n_hidden, n_in);
+//    gt2 = Array2d::Zero(n_out, n_hidden);
+//    gb1 = Array1d::Zero(n_hidden);
+//    gb2 = Array1d::Zero(n_out);
+//  }
 
   void reset(const size_t n_in, const size_t n_out, const size_t n_hidden) {
     gt1 = Array2d::Zero(n_hidden, n_in);
@@ -97,7 +106,7 @@ public:
       squared_error += l_mse;
       n_examples++;
       for (int i = 0; i < outputs.rows(); ++i) {
-        if (predictions(i) <= threshold) {
+        if (predictions(i) <= threshold) { // predicted 0
           if (outputs(i) <= threshold)
             ++tn;
           else
@@ -158,6 +167,7 @@ private:
   Array2d t1, t2;
   Array1d b1, b2;
   Gradient g;
+  Gradient numeric_gradient;
   Gradient momentum;
 
   Metrics train_metrics, dev_metrics, eval_metrics;
@@ -230,12 +240,14 @@ public:
     // const realnumber e_init = sqrt(6) / sqrt(n_in + n_out);
     // const realnumber e_init = 0.5/std::max(n_in, n_out);
     // const realnumber e_init = 1.0/(n_in + n_out);
-    const realnumber e_init = 1.0 / sqrt(n_in);
+    //const realnumber e_init = 1. / sqrt(n_in);
+    const realnumber e_init = 0.5;
     t1 = Array2d::Random(n_hidden, n_in) * e_init;
     t2 = Array2d::Random(n_out, n_hidden) * e_init;
     b1 = Array1d::Random(n_hidden) * e_init;
     b2 = Array1d::Random(n_out) * e_init;
-    g = Gradient(n_in, n_out, n_hidden);
+    // g = Gradient(n_in, n_out, n_hidden);
+    resetGradient();
     momentum = Gradient(n_in, n_out, n_hidden);
     n_examples = 0;
   }
@@ -287,7 +299,15 @@ public:
   }
 
   void resetGradient() {
+    std::cout << "Gradient" << std::endl;
+    printGradient(g);
+    std::cout << "Numeric Gradient" << std::endl;
+    printGradient(numeric_gradient);
+    std::cout << "Diff Gradient" << std::endl;
+    Gradient diff = g.diff(numeric_gradient);
+    printGradient(diff);
     g.reset(n_in, n_out, n_hidden);
+    numeric_gradient.reset(n_in, n_out, n_hidden);
   }
 
   void forward(const Array1d& inputs, Array1d& output_activations) const {
@@ -309,7 +329,7 @@ public:
     oss << "# " << std::endl;
   }
 
-  void printGradient() const {
+  void printGradient(const Gradient& g) const {
     std::cout << "Grad input-to-hidden: " << std::endl;
     std::cout << g.gb1 << std::endl;
     std::cout << g.gt1 << std::endl;
@@ -355,6 +375,84 @@ public:
     }
     n_examples++;
   }
+
+  void numericGradient(const SparseVector& sparseInputs, const SparseVector& sparse_outputs) {
+    const double pertubation = 0.0001;
+    const realnumber min_value = output_activation_fun->minValue();
+    const realnumber max_value = output_activation_fun->maxValue();
+    Array1d outputs = Array1d::Constant(n_out, min_value);
+    sparseToDense(sparse_outputs, n_out, outputs, max_value);
+
+    // b1
+    for (size_t hidx = 0; hidx < n_hidden; ++hidx) {
+      Array1d perturbed_b1 = b1;
+      perturbed_b1(hidx) += pertubation;
+      Array1d output_activations = forward(sparseInputs, t1, perturbed_b1, t2, b2);
+      const double mse_plus = (output_activations - outputs).pow(2).sum()/2.0;
+
+      perturbed_b1 = b1;
+      perturbed_b1(hidx) -= pertubation;
+      output_activations = forward(sparseInputs, t1, perturbed_b1, t2, b2);
+      const double mse_minus = (output_activations - outputs).pow(2).sum()/2.0;
+
+      numeric_gradient.gb1(hidx) += (mse_plus - mse_minus) / (2 * pertubation);
+    }
+    // t1
+    for (size_t iidx = 0; iidx < n_in; ++iidx) {
+      for (size_t hidx = 0; hidx < n_hidden; ++hidx) {
+        Array2d perturbed_t1 = t1;
+        perturbed_t1(hidx, iidx) += pertubation;
+        Array1d output_activations = forward(sparseInputs, perturbed_t1, b1, t2, b2);
+        const double mse_plus = (output_activations - outputs).pow(2).sum()/2.0;
+
+        perturbed_t1 = t1;
+        perturbed_t1(hidx, iidx) -= pertubation;
+        output_activations = forward(sparseInputs, perturbed_t1, b1, t2, b2);
+        const double mse_minus = (output_activations - outputs).pow(2).sum()/2.0;
+
+        numeric_gradient.gt1(hidx, iidx) += (mse_plus - mse_minus) / (2 * pertubation);
+      }
+    }
+
+    //t2
+    for (size_t oidx = 0; oidx < n_out; ++oidx) {
+      for (size_t hidx = 0; hidx < n_hidden; ++hidx) {
+        Array2d perturbed_t2 = t2;
+        perturbed_t2(oidx, hidx) += pertubation;
+        Array1d output_activations = forward(sparseInputs, t1, b1, perturbed_t2, b2);
+        const double mse_plus = (output_activations - outputs).pow(2).sum()/2.0;
+
+        perturbed_t2 = t2;
+        perturbed_t2(oidx, hidx) -= pertubation;
+        output_activations = forward(sparseInputs, t1, b1, perturbed_t2, b2);
+        const double mse_minus = (output_activations - outputs).pow(2).sum()/2.0;
+
+        numeric_gradient.gt2(oidx, hidx) += (mse_plus - mse_minus) / (2 * pertubation);
+      }
+    }
+
+    //b2
+    for (size_t oidx = 0; oidx < n_out; ++oidx) {
+      Array1d perturbed_b2 = b2;
+      perturbed_b2(oidx) += pertubation;
+      Array1d output_activations = forward(sparseInputs, t1, b1, t2, perturbed_b2);
+      const double mse_plus = (output_activations - outputs).pow(2).sum()/2.0;
+
+      perturbed_b2 = b2;
+      perturbed_b2(oidx) -= pertubation;
+      output_activations = forward(sparseInputs, t1, b1, t2, perturbed_b2);
+      const double mse_minus = (output_activations - outputs).pow(2).sum()/2.0;
+
+      numeric_gradient.gb2(oidx) += (mse_plus - mse_minus) / (2 * pertubation);
+    }
+  }
+
+  Array1d forward(const SparseVector& sparseInputs, const Array2d& t1, const Array1d& b1, const Array2d& t2, const Array1d& b2) const {
+    const Array1d hidden_activations = hidden_activation_fun->sigmoid(((t1.matrix() * sparseInputs).array() + b1));
+    const Array1d output_activations = output_activation_fun->sigmoid(((t2.matrix() * hidden_activations.matrix()).array() + b2));
+    return output_activations;
+  }
+
 
   void sparseToDense(const Sentence& sparseVector, const size_t maxIdx, Array1d& denseVector, const realnumber val=1.0) const {
     for (Sentence::const_iterator it = sparseVector.begin(); it != sparseVector.end(); ++it) {
