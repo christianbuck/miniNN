@@ -1,5 +1,5 @@
 CXXFLAGS =	-std=c++0x -fopenmp -O3 -g -Wall -fmessage-length=0 -I/home/buck/build/eigen3 -I/usr/include/eigen3/
-LDFLAGS =  -std=c++0x -fopenmp -O3 -largtable2 -static
+LDFLAGS := $(LDFLAGS) -std=c++0x -fopenmp -O3 -largtable2 -static
 
 OBJS =		trainNN.o predictNN.o
 HEADERS =		*.h
