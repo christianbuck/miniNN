@@ -234,8 +234,10 @@ public:
       n_examples(0) {
 //    hidden_activation_fun = new TanhActivationFunction();
 //    output_activation_fun = new TanhActivationFunction();
-    hidden_activation_fun = new LogisticActivationFunction();
-    output_activation_fun = new LogisticActivationFunction();
+//    hidden_activation_fun = new LogisticActivationFunction();
+//    output_activation_fun = new LogisticActivationFunction();
+    hidden_activation_fun = new RectifiedActivationFunction();
+    output_activation_fun = new RectifiedActivationFunction();
     // init weights to random values - best strategy may depdent on activation function
     // const realnumber e_init = sqrt(6) / sqrt(n_in + n_out);
     // const realnumber e_init = 0.5/std::max(n_in, n_out);
@@ -339,15 +341,17 @@ public:
   }
 
   void updateGradient(const Array1d& inputs, const Array1d& outputs) {
-    const Array1d hidden_activations = hidden_activation_fun->sigmoid(((t1.matrix() * inputs.matrix()).array() + b1));
-    const Array1d output_activations = output_activation_fun->sigmoid(((t2.matrix() * hidden_activations.matrix()).array() + b2));
+    const Array1d hidden_input = (t1.matrix() * inputs.matrix()).array() + b1;
+    const Array1d hidden_activations = hidden_activation_fun->sigmoid(hidden_input);
+    const Array1d output_input = (t2.matrix() * hidden_activations.matrix()).array() + b2;
+    const Array1d output_activations = output_activation_fun->sigmoid(output_input);
 
     train_metrics.update(outputs, output_activations, output_activation_fun->getThreshold());
 
     Array1d delta_output = -(outputs - output_activations);
-    delta_output *= output_activation_fun->sigmoidDeriv(output_activations);
+    delta_output *= output_activation_fun->sigmoidDeriv(output_input, output_activations);
     Array1d delta_hidden = t2.matrix().transpose() * delta_output.matrix();
-    delta_hidden *= hidden_activation_fun->sigmoidDeriv(hidden_activations);
+    delta_hidden *= hidden_activation_fun->sigmoidDeriv(hidden_input, hidden_activations);
 
     g.gt2 += (delta_output.matrix() * hidden_activations.matrix().transpose()).array();
     g.gt1 += (delta_hidden.matrix() * inputs.matrix().transpose()).array();
@@ -357,15 +361,17 @@ public:
   }
 
   void updateGradient(const SparseVector& sparseInputs, const Array1d& outputs) {
-    const Array1d hidden_activations = hidden_activation_fun->sigmoid(((t1.matrix() * sparseInputs).array() + b1));
-    const Array1d output_activations = output_activation_fun->sigmoid(((t2.matrix() * hidden_activations.matrix()).array() + b2));
+    const Array1d hidden_input = (t1.matrix() * sparseInputs).array() + b1;
+    const Array1d hidden_activations = hidden_activation_fun->sigmoid(hidden_input);
+    const Array1d output_input = (t2.matrix() * hidden_activations.matrix()).array() + b2;
+    const Array1d output_activations = output_activation_fun->sigmoid(output_input);
 
     train_metrics.update(outputs, output_activations, output_activation_fun->getThreshold());
 
     Array1d delta_output = -(outputs - output_activations);
-    delta_output *= output_activation_fun->sigmoidDeriv(output_activations);
+    delta_output *= output_activation_fun->sigmoidDeriv(output_input, output_activations);
     Array1d delta_hidden = t2.matrix().transpose() * delta_output.matrix();
-    delta_hidden *= hidden_activation_fun->sigmoidDeriv(hidden_activations);
+    delta_hidden *= hidden_activation_fun->sigmoidDeriv(hidden_input, hidden_activations);
 
     g.gb2 += delta_output;
     g.gt2 += (delta_output.matrix() * hidden_activations.matrix().transpose()).array();
